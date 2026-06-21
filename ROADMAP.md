@@ -21,25 +21,30 @@ This document tracks the path from V1 to "fastest framework ever" and beyond.
 ## V1.1 — Productivity (next 1-2 weeks)
 
 ### Backend
-- **C ABI via `cbindgen`** — opaque `KungfuRouter`/`KungfuServer` pointers. Prerequisite for the non-JS language bindings.
-- **Wire sqlx real drivers** — the ORM has feature-gated `sqlx` deps but the `query()` impl returns `Error::NoDriver`. ~2 hours to wire up Postgres/MySQL/SQLite.
-- **Argon2id password hashing** on `sensitive` ORM fields. Spec'd but not implemented.
-- **JSON Schema request validation** — rejected requests return 422 with the schema violation message.
-- **Multipart body parsing**.
-- **HTTP/1.1 pipelining with batched `writev`** on the io_uring path — current pipelining reads ahead but writes one response at a time.
+- ✅ **WebSocket routes** — `Kungfu::new().ws("/chat", handler)`. RFC 6455 frame parser/encoder + auto upgrade handshake.
+- ✅ **Multipart body parsing** — `req.multipart()` parses `multipart/form-data` for file uploads.
+- ✅ **JSON Schema request validation** — `validate_json("/users", Method::Post, schema)` middleware with type/required/min/max/enum checks.
+- ✅ **Argon2id password hashing** — `sensitive` ORM fields auto-hashed on insert. `verify_password()` for login flows.
+- ✅ **Gzip compression middleware** — `gzip()` compresses response bodies based on `Accept-Encoding`.
+- ✅ **CLI: kungfu new** — scaffold a new project with `kungfu new <name>`.
+- ✅ **CLI: kungfu start** — runs `cargo run` in the current directory.
+- ✅ **CLI: kungfu build** — runs `cargo build --release`.
+- ⏳ **C ABI via `cbindgen`** — opaque `KungfuRouter`/`KungfuServer` pointers. Prerequisite for the C++/Dart/Swift bindings.
+- ⏳ **Wire sqlx real drivers** — the ORM has feature-gated `sqlx` deps but the `query()` impl returns `Error::NoDriver`. ~2 hours to wire up Postgres/MySQL/SQLite.
+- ⏳ **Source-code hot reload** (cargo-watch style, not just router swap).
 
 ### Frontend
-- **`.kungfu` SSR execution** — the Rust side parses + renders but execution of `data()`/`template()` requires a JS runtime (Deno or Node). Wire up a subprocess call.
-- **WebSocket live reload server** — the broadcast server exists but isn't wired into the HTTP listener yet.
-- **End-to-end type safety** — the TS type generator exists but isn't wired into the build.
+- ⏳ **`.kungfu` SSR execution** — the Rust side parses + renders but execution of `data()`/`template()` requires a JS runtime (Deno or Node). Wire up a subprocess call.
+- ⏳ **WebSocket live reload server** — the broadcast server exists but isn't wired into the HTTP listener yet.
+- ⏳ **End-to-end type safety** — the TS type generator exists but isn't wired into the build.
 
 ### CLI
-- **`kungfu new <name>`** — scaffold a new project from a template in the user's preferred language.
-- **`kungfu start`** — start dev server with file watching + rebuild-on-save.
-- **`kungfu build`** — standalone binary (bundles Node runtime via `pkg` for JS bindings).
-- **`kungfu migrate`** — run ORM migrations.
-- **`kungfu generate admin`** — generate admin dashboard from model definitions.
-- **`kungfu deploy`** — one-command deploy to Docker / Vercel / AWS Lambda.
+- ⏳ **`kungfu migrate`** — run ORM migrations (currently generates SQL only).
+- ⏳ **`kungfu generate admin`** — generate admin dashboard from model definitions.
+- ⏳ **`kungfu deploy`** — one-command deploy to Docker / Vercel / AWS Lambda.
+
+### Documentation
+- ✅ **NextJS-style tutorial** — `docs/learn/` with all 10 chapters (Getting Started, Routing, Middleware, Request & Response, Cookies & Sessions, Static Files, Database & ORM, Frontend & SSR, OpenAPI & Docs, Deployment).
 
 ## V1.2 — Polyglot bindings (1-2 months)
 
