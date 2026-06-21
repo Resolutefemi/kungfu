@@ -64,21 +64,68 @@ pub fn register_pages(router: &mut Router, pages_dir: &Path) -> std::io::Result<
             }
         };
 
-        // Register a placeholder GET route. Actual SSR happens via
-        // `ssr_executor::render_kungfu_file`.
+        // Register a GET route that actually renders the .kungfu file
+        // via the SSR executor (Node.js subprocess).
         let route_path = kungfu_file.route_path.clone();
         let file_path = path.to_path_buf();
-        let handler: kungfu_core::Handler = std::sync::Arc::new(move |_req| {
+        let handler: kungfu_core::Handler = std::sync::Arc::new(move |req| {
             let file_path = file_path.clone();
             Box::pin(async move {
-                // V1: return a placeholder. V1.1 will call render_kungfu_file.
-                kungfu_core::Response::new().html(format!(
-                    "<!-- Kungfu SSR placeholder for {} -->\n\
-                     <p>This .kungfu file would be rendered server-side.</p>\n\
-                     <p>File: {}</p>",
-                    file_path.display(),
-                    file_path.display()
-                ))
+                // Build the request JSON to pass to data().
+                let req_json = serde_json::json!({
+                    "url": req.path,
+                    "method": req.method.as_str(),
+                    "query": req.query,
+                    "params": req.params,
+                    "headers": req.headers.iter()
+                        .map(|(k, v)| (k.clone(), v.clone()))
+                        .collect::<std::collections::HashMap<_, _>>(),
+                })
+                .to_string();
+
+                // Try to render via Node subprocess.
+                let ctx = crate::ssr::SsrContext {
+                    url: req.path.clone(),
+                    headers: serde_json::json!({}),
+                    inject_livereload: true,
+                };
+
+                match crate::ssr_executor::render_kungfu_file(&file_path, &req_json, &ctx).await {
+                    Ok(html) => {
+                        // Wrap in a full HTML page with CSS + livereload.
+                        let kungfu_file = parse_kungfu_file(
+                            &std::fs::read_to_string(&file_path).unwrap_or_default(),
+                            &file_path.to_string_lossy(),
+                        ).unwrap_or_else(|_| {
+                            // Fallback: just use the rendered HTML directly.
+                            crate::parser::KungfuFile {
+                                code: String::new(),
+                                static_html: None,
+                                route_path: String::new(),
+                            }
+                        });
+                        let full_html = crate::ssr::render_page(
+                            &kungfu_file,
+                            &ctx,
+                            &html,
+                            &serde_json::json!({}),
+                        );
+                        kungfu_core::Response::new().html(full_html)
+                    }
+                    Err(e) => {
+                        // Fallback: return the placeholder with error info.
+                        tracing::warn!("SSR render failed for {}: {e}", file_path.display());
+                        kungfu_core::Response::new().html(format!(
+                            "<!-- Kungfu SSR: render failed for {} -->\n\
+                             <h1>SSR Error</h1>\n\
+                             <p>Could not render this page: {e}</p>\n\
+                             <p>Make sure Node.js is installed and the .kungfu file is valid.</p>\n\
+                             <p>File: {}</p>",
+                            file_path.display(),
+                            file_path.display()
+                        ))
+                    }
+                }
             })
         });
         let _ = router.add_with_meta(
