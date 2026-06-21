@@ -1,0 +1,81 @@
+name: Benchmark
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'core/**'
+      - 'cli/src/bin/**'
+      - '.github/workflows/benchmark.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'core/**'
+      - 'cli/src/bin/**'
+  workflow_dispatch:
+  schedule:
+    # Run nightly to track performance drift.
+    - cron: '0 0 * * *'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  benchmark:
+    name: Run kungfu_bench
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq oha
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build kungfu_bench (default features)
+        run: cargo build -p kungfu-cli --bin kungfu_bench --release
+
+      - name: Build kungfu_bench (max perf features)
+        run: cargo build -p kungfu-cli --bin kungfu_bench --release --features "kungfu-core/io_uring kungfu-core/simd"
+
+      - name: Build kungfu demo (max perf)
+        run: cargo build -p kungfu-cli --bin kungfu --release --features "kungfu-core/io_uring kungfu-core/simd"
+
+      - name: Start kungfu server
+        run: |
+          ./target/release/kungfu demo &
+          echo $! > /tmp/kungfu.pid
+          sleep 3
+          curl -sf http://localhost:3000/hello | grep -q '"message":"world"' || exit 1
+
+      - name: Run oha benchmark (60s, 256 concurrent)
+        run: |
+          oha -z 60s -c 256 --no-tui http://localhost:3000/hello > /tmp/bench-result.txt 2>&1
+          cat /tmp/bench-result.txt
+
+      - name: Parse and store results
+        run: |
+          mkdir -p bench/results
+          {
+            echo "# Kungfu benchmark — $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            echo
+            echo "Runner: ${{ runner.os }} ${{ runner.arch }}"
+            echo
+            echo '```'
+            cat /tmp/bench-result.txt
+            echo '```'
+          } > bench/results/CI.md
+          cat bench/results/CI.md
+
+      - name: Stop kungfu server
+        if: always()
+        run: kill $(cat /tmp/kungfu.pid) || true
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: bench/results/
