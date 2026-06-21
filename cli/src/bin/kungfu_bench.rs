@@ -50,20 +50,20 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         }),
     )?;
 
-    // Bind a real listener on a random port.
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
-    let addr = listener.local_addr().unwrap();
-
     // Spin up the server with N acceptor threads. On Linux with N>1 this
     // uses SO_REUSEPORT so the kernel load-balances connections.
     let n_cpus = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
     let acceptor_threads = n_cpus.min(8);
-    let server = Server::new(router, addr).with_acceptor_threads(acceptor_threads);
 
-    println!("kungfu bench: {} acceptor threads, {} workers, {} req/worker",
+    // Bind a real listener on a random port so we can connect to it.
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
+    let addr = listener.local_addr().unwrap();
+
+    println!("kungfu bench: {} acceptor threads (tokio epoll), {} workers, {} req/worker",
         acceptor_threads, CONCURRENCY, REQUESTS_PER_WORKER);
+    println!("   (For io_uring numbers, run `kungfu demo` + external `oha`)");
 
-    // We already bound the listener; use serve_on.
+    let server = Server::new(router, addr).with_acceptor_threads(acceptor_threads);
     let server_task = tokio::spawn(async move {
         let _ = server.serve_on(listener).await;
     });
