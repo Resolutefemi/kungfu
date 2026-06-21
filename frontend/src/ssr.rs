@@ -7,6 +7,7 @@
 use crate::parser::KungfuFile;
 
 /// Context for a single SSR render.
+#[derive(Debug, Clone)]
 pub struct SsrContext {
     /// The request URL (used by `data()`).
     pub url: String,

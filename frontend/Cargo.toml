@@ -20,6 +20,7 @@ tracing = { workspace = true }
 thiserror = { workspace = true }
 once_cell = { workspace = true }
 regex = { workspace = true }
+parking_lot = { workspace = true }
 walkdir = "2"
 
 [dev-dependencies]
