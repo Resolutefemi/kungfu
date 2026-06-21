@@ -7,8 +7,11 @@
 //!   - cors
 //!   - security_headers
 //!   - rate_limiter
+//!   - serve_static (opt-in)
 
 pub mod logger;
 pub mod cors;
 pub mod security_headers;
 pub mod rate_limiter;
+pub mod serve_static;
+pub mod etag;
