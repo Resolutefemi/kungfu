@@ -1,0 +1,49 @@
+[package]
+name = "kungfu-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Core engine for the Kungfu.js polyglot web framework"
+
+[lib]
+name = "kungfu_core"
+path = "src/lib.rs"
+
+[dependencies]
+tokio = { workspace = true }
+httparse = "1"
+bytes = { workspace = true }
+smallvec = { workspace = true }
+dashmap = { workspace = true }
+crossbeam = { workspace = true }
+parking_lot = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+regex = { workspace = true }
+once_cell = { workspace = true }
+thiserror = { workspace = true }
+notify = { workspace = true }
+socket2 = { version = "0.5", features = ["all"] }
+
+# Optional: SIMD-accelerated JSON for x86_64 with AVX2.
+# Enable with `--features simd`. Falls back to serde_json on other arches.
+simd-json = { version = "0.13", optional = true }
+
+# Optional: io_uring zero-copy I/O on Linux 5.1+.
+# Enable with `--features io_uring`. Falls back to tokio on other platforms.
+# 2-3x throughput improvement on Linux. See PERF.md.
+tokio-uring = { version = "0.5", optional = true }
+
+[features]
+default = []
+# Enable SIMD JSON parsing on x86_64. ~2-4x faster JSON encode/decode.
+simd = ["dep:simd-json"]
+# Enable io_uring zero-copy I/O on Linux 5.1+. ~2-3x throughput improvement.
+# Only available on Linux; on other platforms this is a no-op.
+io_uring = ["dep:tokio-uring"]
+
+[dev-dependencies]
+tokio = { workspace = true }
