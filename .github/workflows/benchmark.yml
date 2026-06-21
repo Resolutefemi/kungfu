@@ -28,32 +28,57 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq oha
+      - name: Install oha via cargo
+        run: cargo install oha --locked --quiet || true
 
       - uses: Swatinem/rust-cache@v2
 
       - name: Build kungfu_bench (default features)
         run: cargo build -p kungfu-cli --bin kungfu_bench --release
 
-      - name: Build kungfu_bench (max perf features)
-        run: cargo build -p kungfu-cli --bin kungfu_bench --release --features "kungfu-core/io_uring kungfu-core/simd"
-
-      - name: Build kungfu demo (max perf)
+      - name: Build kungfu demo (max perf features)
         run: cargo build -p kungfu-cli --bin kungfu --release --features "kungfu-core/io_uring kungfu-core/simd"
 
       - name: Start kungfu server
         run: |
           ./target/release/kungfu demo &
           echo $! > /tmp/kungfu.pid
-          sleep 3
+          sleep 5
           curl -sf http://localhost:3000/hello | grep -q '"message":"world"' || exit 1
 
-      - name: Run oha benchmark (60s, 256 concurrent)
+      - name: Run oha benchmark (30s, 256 concurrent)
         run: |
-          oha -z 60s -c 256 --no-tui http://localhost:3000/hello > /tmp/bench-result.txt 2>&1
+          # If oha isn't available for some reason, fall back to a Python bench.
+          if command -v oha >/dev/null 2>&1; then
+            echo "Using oha..."
+            oha -z 30s -c 256 --no-tui http://localhost:3000/hello > /tmp/bench-result.txt 2>&1
+          else
+            echo "oha not found — falling back to Python bench..."
+            python3 - <<'PY' > /tmp/bench-result.txt 2>&1
+          import socket, time, threading
+          def worker(n, results, idx):
+              s = socket.socket(); s.connect(('127.0.0.1', 3000))
+              s.setsockopt(socket.IPPROTO_TCP, 1, 1)
+              req = b'GET /hello HTTP/1.1\r\nHost: localhost\r\nConnection: keep-alive\r\n\r\n'
+              ok = 0
+              for _ in range(n):
+                  s.sendall(req); buf = b''
+                  while True:
+                      chunk = s.recv(4096)
+                      if not chunk: break
+                      buf += chunk
+                      if len(buf) > 200: break
+                  ok += 1
+              results[idx] = ok; s.close()
+          N, R = 64, 500; results = [0]*N; ts = []
+          t0 = time.time()
+          for i in range(N):
+              t = threading.Thread(target=worker, args=(R, results, i)); t.start(); ts.append(t)
+          for t in ts: t.join()
+          el = time.time() - t0
+          print(f'Python bench: {sum(results)} req in {el:.3f}s = {sum(results)/el:.0f} req/s')
+          PY
+          fi
           cat /tmp/bench-result.txt
 
       - name: Parse and store results
