@@ -1,0 +1,13 @@
+{
+  "name": "kungfu-bench-express",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Express.js equivalent of the kungfu bench, for apples-to-apples comparison",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0"
+  }
+}
