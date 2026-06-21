@@ -1,5 +1,7 @@
 //! Response model.
 
+pub mod pool;
+
 use bytes::Bytes;
 use crate::error::{KungfuError, StatusCode};
 use once_cell::sync::Lazy;
@@ -181,6 +183,18 @@ impl Response {
             }
         }
         out
+    }
+
+    /// Reset this Response to a clean state for reuse by the response pool.
+    /// Clears the body and all custom headers, restores default status +
+    /// default headers (server, x-powered-by).
+    pub fn reset(&mut self) {
+        self.status = StatusCode::Ok;
+        self.headers.clear();
+        self.headers.insert("server".into(), crate::version::banner());
+        self.headers.insert("x-powered-by".into(), crate::version::banner());
+        self.body = Bytes::new();
+        self.finalised = false;
     }
 }
 
