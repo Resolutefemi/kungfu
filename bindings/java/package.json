@@ -1,0 +1,7 @@
+{
+  "name": "kungfu-java",
+  "version": "1.0.0",
+  "description": "Java binding for the Kungfu.js polyglot web framework",
+  "main": "src/main/java/com/kungfu/Kungfu.java",
+  "license": "MIT OR Apache-2.0"
+}
