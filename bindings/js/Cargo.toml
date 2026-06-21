@@ -1,0 +1,25 @@
+[package]
+name = "kungfu-js"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Node.js binding for the Kungfu.js polyglot web framework (via napi-rs)"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+kungfu-core = { path = "../../core" }
+napi = { version = "2", features = ["napi8", "tokio_rt", "serde-json"] }
+napi-derive = "2"
+tokio = { workspace = true }
+serde_json = { workspace = true }
+
+[build-dependencies]
+napi-build = "2"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
