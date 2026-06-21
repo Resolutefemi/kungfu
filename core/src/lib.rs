@@ -11,6 +11,7 @@
 pub mod error;
 pub mod headers;
 pub mod cookies;
+pub mod auth;
 pub mod middleware;
 pub mod openapi;
 pub mod request;
