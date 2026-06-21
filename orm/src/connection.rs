@@ -90,7 +90,7 @@ impl Db {
 
     /// Count matching rows.
     pub async fn count<T: Model>(&self, _q: Query<T>) -> Result<i64> {
-        // Simplified — V2 will translate the query to COUNT(*) properly.
+        // Simplified — V1 will translate the query to COUNT(*) properly.
         Ok(0)
     }
 
@@ -136,6 +136,21 @@ async fn mock_insert<T: Model + serde::Serialize>(
     let table = T::table_name().to_string();
     let mut json = serde_json::to_value(value).map_err(|e| Error::Serde(e))?;
 
+    // Auto-hash sensitive fields (e.g. passwords) marked in the model's FieldDef.
+    if let Some(obj) = json.as_object_mut() {
+        for field in T::fields() {
+            if field.sensitive {
+                if let Some(plain) = obj.get(field.rust_name).and_then(|v| v.as_str()) {
+                    if !plain.starts_with("$argon2") {
+                        // Only hash if it isn't already a hash.
+                        let hashed = crate::password::hash_password(plain)?;
+                        obj.insert(field.rust_name.to_string(), serde_json::json!(hashed));
+                    }
+                }
+            }
+        }
+    }
+
     // Auto-increment primary key.
     let pk_field = T::fields().iter().find(|f| f.is_primary && f.auto_increment);
     if let Some(pk) = pk_field {
@@ -176,5 +191,37 @@ mod tests {
         let all = User::all(&db).await.unwrap();
         assert_eq!(all.len(), 1);
         assert_eq!(all[0].id, 1);
+    }
+
+    #[tokio::test]
+    async fn mock_insert_hashes_sensitive_fields() {
+        // User with a `sensitive` password field — should be Argon2id-hashed
+        // automatically on insert.
+        let db = Db::mock();
+        let user = UserWithPassword {
+            id: 0,
+            email: "alice@example.com".into(),
+            password: "plaintext_password".into(),
+        };
+        let inserted = db.insert_row(&user).await.unwrap();
+        // The stored password should be a hash, not the plaintext.
+        assert!(
+            inserted.password.starts_with("$argon2"),
+            "expected Argon2id hash, got: {}",
+            inserted.password
+        );
+        // Verify the hash matches the original plaintext.
+        assert!(crate::password::verify_password("plaintext_password", &inserted.password).unwrap());
+    }
+
+    #[derive(kungfu_macros::Model, Serialize, Deserialize)]
+    #[table(name = "users_with_password")]
+    struct UserWithPassword {
+        #[field(primary, auto_increment)]
+        id: i64,
+        #[field(unique)]
+        email: String,
+        #[field(sensitive)]
+        password: String,
     }
 }
