@@ -96,6 +96,68 @@ impl KungfuBuilder {
         )
     }
 
+    /// Register an async GET handler. The closure returns a `Future<Output = Response>`.
+    ///
+    /// # Example
+    /// ```ignore
+    /// Kungfu::new()
+    ///     .handle_get_async("/users", |req, res| async move {
+    ///         let users = User::all(&db).await.unwrap();
+    ///         res.json(&users)
+    ///     })
+    /// ```
+    pub fn handle_get_async<F, Fut>(self, path: &str, handler: F) -> Self
+    where
+        F: Fn(Request, ResponseBuilder) -> Fut + Send + Sync + 'static,
+        Fut: std::future::Future<Output = Response> + Send + 'static,
+    {
+        self.handle_async(Method::Get, path, handler)
+    }
+
+    /// Register an async POST handler.
+    pub fn handle_post_async<F, Fut>(self, path: &str, handler: F) -> Self
+    where
+        F: Fn(Request, ResponseBuilder) -> Fut + Send + Sync + 'static,
+        Fut: std::future::Future<Output = Response> + Send + 'static,
+    {
+        self.handle_async(Method::Post, path, handler)
+    }
+
+    /// Register an async PUT handler.
+    pub fn handle_put_async<F, Fut>(self, path: &str, handler: F) -> Self
+    where
+        F: Fn(Request, ResponseBuilder) -> Fut + Send + Sync + 'static,
+        Fut: std::future::Future<Output = Response> + Send + 'static,
+    {
+        self.handle_async(Method::Put, path, handler)
+    }
+
+    /// Register an async DELETE handler.
+    pub fn handle_delete_async<F, Fut>(self, path: &str, handler: F) -> Self
+    where
+        F: Fn(Request, ResponseBuilder) -> Fut + Send + Sync + 'static,
+        Fut: std::future::Future<Output = Response> + Send + 'static,
+    {
+        self.handle_async(Method::Delete, path, handler)
+    }
+
+    /// Internal: register any method handler with an async closure.
+    fn handle_async<F, Fut>(self, method: Method, path: &str, handler: F) -> Self
+    where
+        F: Fn(Request, ResponseBuilder) -> Fut + Send + Sync + 'static,
+        Fut: std::future::Future<Output = Response> + Send + 'static,
+    {
+        let handler = wrap_async_handler(handler);
+        self.add_with_meta(
+            RouteMeta {
+                path: path.to_string(),
+                method,
+                ..Default::default()
+            },
+            handler,
+        )
+    }
+
     /// Register a GET handler that returns JSON, with even less boilerplate.
     ///
     /// # Example
@@ -230,6 +292,21 @@ impl ResponseBuilder {
         self.inner.finalised = true;
         self.inner
     }
+
+    /// Set an error response from a KungfuError.
+    pub fn error(self, err: kungfu_core::KungfuError) -> Response {
+        kungfu_core::Response::new().error(err)
+    }
+
+    /// Set an error response with a status code + message.
+    pub fn error_msg(self, code: u16, message: impl Into<String>) -> Response {
+        kungfu_core::Response::new().error(
+            kungfu_core::KungfuError::new(
+                kungfu_core::StatusCode::from(code),
+                message,
+            )
+        )
+    }
 }
 
 impl Default for ResponseBuilder {
@@ -250,6 +327,23 @@ where
         Box::pin(async move {
             let builder = ResponseBuilder::new();
             f(req, builder)
+        })
+    })
+}
+
+/// Wrap an async `(Request, ResponseBuilder) -> Future<Response>` closure
+/// into a `Handler` that the router expects.
+fn wrap_async_handler<F, Fut>(f: F) -> Handler
+where
+    F: Fn(Request, ResponseBuilder) -> Fut + Send + Sync + 'static,
+    Fut: std::future::Future<Output = Response> + Send + 'static,
+{
+    let f = Arc::new(f);
+    Arc::new(move |req: Request| {
+        let f = f.clone();
+        Box::pin(async move {
+            let builder = ResponseBuilder::new();
+            f(req, builder).await
         })
     })
 }
