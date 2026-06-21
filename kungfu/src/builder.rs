@@ -94,6 +94,29 @@ impl KungfuBuilder {
         self
     }
 
+    /// Register a WebSocket handler at the given path.
+    ///
+    /// # Example
+    /// ```ignore
+    /// Kungfu::new()
+    ///     .ws("/chat", |mut ws: kungfu::WebSocket| async move {
+    ///         while let Some(msg) = ws.recv().await {
+    ///             if let kungfu::WebSocketMessage::Text(t) = msg {
+    ///                 ws.send_text(format!("echo: {t}")).await;
+    ///             }
+    ///         }
+    ///     })
+    ///     .run("0.0.0.0:3000")
+    /// ```
+    pub fn ws<F, Fut>(mut self, path: &str, handler: F) -> Self
+    where
+        F: Fn(kungfu_core::websocket::WebSocket) -> Fut + Send + Sync + 'static,
+        Fut: std::future::Future<Output = ()> + Send + 'static,
+    {
+        self.router.ws(path, handler);
+        self
+    }
+
     /// Disable the default secure-by-default middleware stack. The framework
     /// emits a `tracing::warn!` per spec.
     pub fn insecure(mut self) -> Self {
