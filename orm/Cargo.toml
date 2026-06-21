@@ -1,0 +1,36 @@
+[package]
+name = "kungfu-orm"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Built-in ORM for the Kungfu.js framework"
+
+[lib]
+name = "kungfu_orm"
+path = "src/lib.rs"
+
+[dependencies]
+kungfu-core = { path = "../core" }
+kungfu-macros = { path = "../kungfu-macros" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+parking_lot = { workspace = true }
+once_cell = { workspace = true }
+async-trait = "0.1"
+
+# Database drivers — feature-gated so the default build stays light.
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls"], optional = true }
+
+[features]
+default = []
+postgres = ["dep:sqlx", "sqlx/postgres"]
+mysql = ["dep:sqlx", "sqlx/mysql"]
+sqlite = ["dep:sqlx", "sqlx/sqlite"]
+
+[dev-dependencies]
+tokio = { workspace = true }
+kungfu-macros = { path = "../kungfu-macros" }
