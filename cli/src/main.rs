@@ -1,6 +1,9 @@
 //! The `kungfu` CLI.
 
 mod scaffold;
+mod migrate;
+mod admin;
+mod deploy;
 
 use std::net::SocketAddr;
 
@@ -47,23 +50,66 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             let _ = std::process::Command::new("cargo").arg("run").status();
         }
         Some("migrate") => {
-            eprintln!("`kungfu migrate` — generates SQL migrations from Model definitions.");
-            eprintln!("In V1, migrations are generated at startup via `kungfu_orm::generate_migration::<T>()`.");
-            eprintln!("See orm/examples/orm_mock.rs for an example.");
+            println!("Kungfu migration generator");
+            println!();
+            for line in migrate::generate_migrations(&std::env::current_dir()?) {
+                println!("{line}");
+            }
+            println!();
+            println!("To apply migrations:");
+            println!("  1. Call kungfu_orm::generate_migration::<YourModel>() in your main.rs");
+            println!("  2. Execute the returned SQL against your database");
+            println!();
+            println!("Or use sqlx::migrate! macro for migration files.");
+        }
+        Some("generate") => {
+            let what = args.get(2).map(|s| s.as_str()).unwrap_or("");
+            match what {
+                "admin" => {
+                    let out_path = std::path::PathBuf::from("public/admin/index.html");
+                    if let Some(parent) = out_path.parent() {
+                        std::fs::create_dir_all(parent)?;
+                    }
+                    std::fs::write(&out_path, admin::generate_admin_html("Kungfu API"))?;
+                    println!("✓ Generated admin dashboard at {}", out_path.display());
+                    println!("  Serve it with: kungfu demo (then visit /admin/index.html)");
+                }
+                "" => {
+                    eprintln!("Usage: kungfu generate <what>");
+                    eprintln!("  admin  — generate admin dashboard at public/admin/index.html");
+                }
+                other => {
+                    eprintln!("Unknown generate target: {other}");
+                    eprintln!("Available: admin");
+                }
+            }
+        }
+        Some("deploy") => {
+            let project_name = std::env::current_dir()?
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("kungfu-app")
+                .to_string();
+            let port: u16 = args
+                .get(2)
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(3000);
+            deploy::write_deploy_files(&std::env::current_dir()?, &project_name, port)?;
+            println!("✓ Generated deployment files:");
+            println!("  - Dockerfile");
+            println!("  - docker-compose.yml");
+            println!("  - .dockerignore");
+            println!("  - {name}.service", name = project_name);
+            println!();
+            println!("Next steps:");
+            println!("  Docker:  docker build -t {name} . && docker run -p {port}:{port} {name}", name = project_name, port = port);
+            println!("  systemd: sudo cp {name}.service /etc/systemd/system/ && sudo systemctl start {name}", name = project_name);
         }
         Some("build") => {
             eprintln!("`kungfu build` runs `cargo build --release`.");
             let _ = std::process::Command::new("cargo")
                 .args(["build", "--release"])
                 .status();
-        }
-        Some("generate") => {
-            eprintln!("`kungfu generate` is not implemented in V1.");
-            eprintln!("Roadmap: generate admin dashboards, ORM models, etc.");
-        }
-        Some("deploy") => {
-            eprintln!("`kungfu deploy` is not implemented in V1.");
-            eprintln!("Roadmap: one-command deploy to Docker / Vercel / AWS Lambda.");
         }
         Some(other) => {
             eprintln!("Unknown command: {other}");
