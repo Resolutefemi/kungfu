@@ -1,0 +1,5 @@
+module CKungfu [system] {
+    header "../../core/kungfu.h"
+    link "kungfu_core"
+    export *
+}
