@@ -9,6 +9,7 @@
 
 pub mod error;
 pub mod headers;
+pub mod cookies;
 pub mod middleware;
 pub mod openapi;
 pub mod request;
@@ -19,15 +20,18 @@ pub mod version;
 
 pub mod middleware_builtin {
     pub use crate::middleware::builtin::cors::{cors, cors_with, CorsConfig};
+    pub use crate::middleware::builtin::etag::etag;
     pub use crate::middleware::builtin::logger::logger;
     pub use crate::middleware::builtin::rate_limiter::{rate_limiter, rate_limiter_with, RateLimiterConfig};
     pub use crate::middleware::builtin::security_headers::{
         security_headers, security_headers_with, SecurityConfig,
     };
+    pub use crate::middleware::builtin::serve_static::serve_static;
 }
 
 pub use error::{KungfuError, Result, StatusCode};
 pub use headers::Headers;
+pub use cookies::{Cookie, CookieJar, SameSite};
 pub use middleware::{build_chain, Middleware, Next, NextFuture};
 pub use request::{parse_query, Method, Request};
 pub use response::Response;
