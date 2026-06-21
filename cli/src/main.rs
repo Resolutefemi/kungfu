@@ -4,6 +4,7 @@ mod scaffold;
 mod migrate;
 mod admin;
 mod deploy;
+mod source_hot_reload;
 
 use std::net::SocketAddr;
 
@@ -44,9 +45,16 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             }
         }
         Some("start") => {
-            eprintln!("`kungfu start` runs `cargo run` with file watching.");
-            eprintln!("For now, use: cargo run");
-            // Try to run `cargo run` in the current directory.
+            // If --watch flag is present, use source-code hot reload.
+            let watch = args.iter().any(|a| a == "--watch");
+            if watch {
+                println!("🥋 Starting with source-code hot reload...");
+                source_hot_reload::watch_and_rebuild(&source_hot_reload::SourceReloadConfig::default())?;
+                return Ok(());
+            }
+            // Otherwise just run `cargo run`.
+            eprintln!("`kungfu start` runs `cargo run` in the current directory.");
+            eprintln!("Use `kungfu start --watch` for source-code hot reload.");
             let _ = std::process::Command::new("cargo").arg("run").status();
         }
         Some("migrate") => {
