@@ -79,13 +79,30 @@ fn utility_to_css(name: &str) -> Option<Vec<String>> {
         "flex-row" => return Some(vec!["flex-direction: row".into()]),
         "flex-col" => return Some(vec!["flex-direction: column".into()]),
         "flex-wrap" => return Some(vec!["flex-wrap: wrap".into()]),
+        "flex-nowrap" => return Some(vec!["flex-wrap: nowrap".into()]),
+        "flex-1" => return Some(vec!["flex: 1 1 0%".into()]),
+        "flex-auto" => return Some(vec!["flex: 1 1 auto".into()]),
+        "flex-none" => return Some(vec!["flex: none".into()]),
         "items-center" => return Some(vec!["align-items: center".into()]),
         "items-start" => return Some(vec!["align-items: flex-start".into()]),
         "items-end" => return Some(vec!["align-items: flex-end".into()]),
+        "items-stretch" => return Some(vec!["align-items: stretch".into()]),
+        "items-baseline" => return Some(vec!["align-items: baseline".into()]),
         "justify-center" => return Some(vec!["justify-content: center".into()]),
         "justify-between" => return Some(vec!["justify-content: space-between".into()]),
         "justify-start" => return Some(vec!["justify-content: flex-start".into()]),
         "justify-end" => return Some(vec!["justify-content: flex-end".into()]),
+        "justify-around" => return Some(vec!["justify-content: space-around".into()]),
+        "justify-evenly" => return Some(vec!["justify-content: space-evenly".into()]),
+        "self-auto" => return Some(vec!["align-self: auto".into()]),
+        "self-start" => return Some(vec!["align-self: flex-start".into()]),
+        "self-end" => return Some(vec!["align-self: flex-end".into()]),
+        "self-center" => return Some(vec!["align-self: center".into()]),
+        "gap-1" => return Some(vec!["gap: 0.25rem".into()]),
+        "gap-2" => return Some(vec!["gap: 0.5rem".into()]),
+        "gap-4" => return Some(vec!["gap: 1rem".into()]),
+        "gap-6" => return Some(vec!["gap: 1.5rem".into()]),
+        "gap-8" => return Some(vec!["gap: 2rem".into()]),
         _ => {}
     }
 
@@ -310,5 +327,21 @@ mod tests {
         let css = emit_css(&tokens);
         assert!(css.contains("@media (min-width: 768px)"));
         assert!(css.contains("@media (min-width: 1024px)"));
+    }
+
+    #[test]
+    fn emits_flexbox_expansion() {
+        let tokens = parse_class_string("flex-1 flex-col gap-4 justify-around self-center");
+        let css = emit_css(&tokens);
+        assert!(css.contains(".flex-1"));
+        assert!(css.contains("flex: 1 1 0%"));
+        assert!(css.contains(".flex-col"));
+        assert!(css.contains("flex-direction: column"));
+        assert!(css.contains(".gap-4"));
+        assert!(css.contains("gap: 1rem"));
+        assert!(css.contains(".justify-around"));
+        assert!(css.contains("justify-content: space-around"));
+        assert!(css.contains(".self-center"));
+        assert!(css.contains("align-self: center"));
     }
 }
