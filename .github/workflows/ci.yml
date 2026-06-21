@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  test:
+    name: Test (default features)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --workspace --verbose
+      - name: Test
+        run: cargo test --workspace --lib --verbose
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+        continue-on-error: true  # V1: clippy warnings are advisory
+      - name: Format check
+        run: cargo fmt --all -- --check
+        continue-on-error: true  # V1: fmt is advisory
+
+  test-features:
+    name: Test (io_uring + simd features)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build with all features
+        run: cargo build -p kungfu-core --features "io_uring simd" --verbose
+      - name: Test with all features
+        run: cargo test -p kungfu-core --lib --features "io_uring simd" --verbose
+
+  bench:
+    name: Build benchmark binary
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build bench binary
+        run: cargo build -p kungfu-cli --bin kungfu_bench --release
+      - name: Build demo binary with max perf
+        run: cargo build -p kungfu-cli --features "kungfu-core/io_uring kungfu-core/simd" --release
+
+  js-binding:
+    name: JS binding builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install napi-rs CLI
+        run: cd bindings/js && npm install
+      - name: Build native binding
+        run: cd bindings/js && npm run build:debug
+        continue-on-error: true  # napi-rs build is finicky in CI; treat as advisory
+
+  doc:
+    name: Build documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build docs
+        run: cargo doc --workspace --no-deps
