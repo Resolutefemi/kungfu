@@ -77,14 +77,15 @@ impl Db {
 
     /// Execute a SELECT query and deserialise rows into `T`.
     pub async fn query<T: Model>(&self, q: Query<T>) -> Result<Vec<T>> {
+        let (sql, params) = q.to_sql();
         match &*self.inner {
             DbInner::Mock(m) => mock_query(m, q).await,
             #[cfg(feature = "postgres")]
-            DbInner::Postgres(_) => Err(Error::NoDriver), // TODO: implement sqlx-backed query
+            DbInner::Postgres(pool) => sqlx_postgres_query(pool, &sql, &params).await,
             #[cfg(feature = "mysql")]
-            DbInner::Mysql(_) => Err(Error::NoDriver),
+            DbInner::Mysql(pool) => sqlx_mysql_query(pool, &sql, &params).await,
             #[cfg(feature = "sqlite")]
-            DbInner::Sqlite(_) => Err(Error::NoDriver),
+            DbInner::Sqlite(pool) => sqlx_sqlite_query(pool, &sql, &params).await,
         }
     }
 
@@ -224,4 +225,176 @@ mod tests {
         #[field(sensitive)]
         password: String,
     }
+}
+
+// ─── sqlx-backed query implementations ────────────────────────────────────────
+
+#[cfg(feature = "postgres")]
+async fn sqlx_postgres_query<T: Model + serde::de::DeserializeOwned>(
+    pool: &sqlx::PgPool,
+    sql: &str,
+    params: &[serde_json::Value],
+) -> Result<Vec<T>> {
+    let mut q = sqlx::query(sql);
+    for p in params {
+        q = bind_param_postgres(q, p);
+    }
+    let rows = q.fetch_all(pool).await.map_err(|e| Error::Database(e.to_string()))?;
+    let mut out = Vec::with_capacity(rows.len());
+    for row in rows {
+        let value = row_to_json_postgres(&row);
+        let t: T = serde_json::from_value(value).map_err(Error::Serde)?;
+        out.push(t);
+    }
+    Ok(out)
+}
+
+#[cfg(feature = "postgres")]
+fn bind_param_postgres<'q>(
+    q: sqlx::query::Query<'q, sqlx::Postgres, sqlx::postgres::PgArguments>,
+    p: &serde_json::Value,
+) -> sqlx::query::Query<'q, sqlx::Postgres, sqlx::postgres::PgArguments> {
+    match p {
+        serde_json::Value::Null => q.bind(None::<String>),
+        serde_json::Value::Bool(b) => q.bind(b),
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_i64() { q.bind(i) }
+            else if let Some(f) = n.as_f64() { q.bind(f) }
+            else { q.bind(n.to_string()) }
+        }
+        serde_json::Value::String(s) => q.bind(s),
+        _ => q.bind(p.to_string()),
+    }
+}
+
+#[cfg(feature = "postgres")]
+fn row_to_json_postgres(row: &sqlx::postgres::PgRow) -> serde_json::Value {
+    use sqlx::Row;
+    let mut map = serde_json::Map::new();
+    for (i, col) in row.columns().iter().enumerate() {
+        let name = col.name();
+        let value: serde_json::Value = if let Ok(v) = row.try_get::<Option<String>, _>(i) {
+            v.map(serde_json::Value::String).unwrap_or(serde_json::Value::Null)
+        } else if let Ok(v) = row.try_get::<Option<i64>, _>(i) {
+            v.map(|n| serde_json::json!(n)).unwrap_or(serde_json::Value::Null)
+        } else if let Ok(v) = row.try_get::<Option<f64>, _>(i) {
+            v.map(|n| serde_json::json!(n)).unwrap_or(serde_json::Value::Null)
+        } else if let Ok(v) = row.try_get::<Option<bool>, _>(i) {
+            v.map(serde_json::Value::Bool).unwrap_or(serde_json::Value::Null)
+        } else {
+            serde_json::Value::Null
+        };
+        map.insert(name.to_string(), value);
+    }
+    serde_json::Value::Object(map)
+}
+
+#[cfg(feature = "mysql")]
+async fn sqlx_mysql_query<T: Model + serde::de::DeserializeOwned>(
+    pool: &sqlx::MySqlPool,
+    sql: &str,
+    params: &[serde_json::Value],
+) -> Result<Vec<T>> {
+    let mut q = sqlx::query(sql);
+    for p in params { q = bind_param_mysql(q, p); }
+    let rows = q.fetch_all(pool).await.map_err(|e| Error::Database(e.to_string()))?;
+    let mut out = Vec::with_capacity(rows.len());
+    for row in rows {
+        let value = row_to_json_mysql(&row);
+        let t: T = serde_json::from_value(value).map_err(Error::Serde)?;
+        out.push(t);
+    }
+    Ok(out)
+}
+
+#[cfg(feature = "mysql")]
+fn bind_param_mysql<'q>(
+    q: sqlx::query::Query<'q, sqlx::MySql, sqlx::mysql::MySqlArguments>,
+    p: &serde_json::Value,
+) -> sqlx::query::Query<'q, sqlx::MySql, sqlx::mysql::MySqlArguments> {
+    match p {
+        serde_json::Value::Null => q.bind(None::<String>),
+        serde_json::Value::Bool(b) => q.bind(b),
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_i64() { q.bind(i) }
+            else if let Some(f) = n.as_f64() { q.bind(f) }
+            else { q.bind(n.to_string()) }
+        }
+        serde_json::Value::String(s) => q.bind(s),
+        _ => q.bind(p.to_string()),
+    }
+}
+
+#[cfg(feature = "mysql")]
+fn row_to_json_mysql(row: &sqlx::mysql::MySqlRow) -> serde_json::Value {
+    use sqlx::Row;
+    let mut map = serde_json::Map::new();
+    for (i, col) in row.columns().iter().enumerate() {
+        let name = col.name();
+        let value: serde_json::Value = if let Ok(v) = row.try_get::<Option<String>, _>(i) {
+            v.map(serde_json::Value::String).unwrap_or(serde_json::Value::Null)
+        } else if let Ok(v) = row.try_get::<Option<i64>, _>(i) {
+            v.map(|n| serde_json::json!(n)).unwrap_or(serde_json::Value::Null)
+        } else if let Ok(v) = row.try_get::<Option<f64>, _>(i) {
+            v.map(|n| serde_json::json!(n)).unwrap_or(serde_json::Value::Null)
+        } else { serde_json::Value::Null };
+        map.insert(name.to_string(), value);
+    }
+    serde_json::Value::Object(map)
+}
+
+#[cfg(feature = "sqlite")]
+async fn sqlx_sqlite_query<T: Model + serde::de::DeserializeOwned>(
+    pool: &sqlx::SqlitePool,
+    sql: &str,
+    params: &[serde_json::Value],
+) -> Result<Vec<T>> {
+    let mut q = sqlx::query(sql);
+    for p in params { q = bind_param_sqlite(q, p); }
+    let rows = q.fetch_all(pool).await.map_err(|e| Error::Database(e.to_string()))?;
+    let mut out = Vec::with_capacity(rows.len());
+    for row in rows {
+        let value = row_to_json_sqlite(&row);
+        let t: T = serde_json::from_value(value).map_err(Error::Serde)?;
+        out.push(t);
+    }
+    Ok(out)
+}
+
+#[cfg(feature = "sqlite")]
+fn bind_param_sqlite<'q>(
+    q: sqlx::query::Query<'q, sqlx::Sqlite, sqlx::sqlite::SqliteArguments<'q>>,
+    p: &serde_json::Value,
+) -> sqlx::query::Query<'q, sqlx::Sqlite, sqlx::sqlite::SqliteArguments<'q>> {
+    match p {
+        serde_json::Value::Null => q.bind(None::<String>),
+        serde_json::Value::Bool(b) => q.bind(b),
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_i64() { q.bind(i) }
+            else if let Some(f) = n.as_f64() { q.bind(f) }
+            else { q.bind(n.to_string()) }
+        }
+        serde_json::Value::String(s) => q.bind(s),
+        _ => q.bind(p.to_string()),
+    }
+}
+
+#[cfg(feature = "sqlite")]
+fn row_to_json_sqlite(row: &sqlx::sqlite::SqliteRow) -> serde_json::Value {
+    use sqlx::Row;
+    let mut map = serde_json::Map::new();
+    for (i, col) in row.columns().iter().enumerate() {
+        let name = col.name();
+        let value: serde_json::Value = if let Ok(v) = row.try_get::<Option<String>, _>(i) {
+            v.map(serde_json::Value::String).unwrap_or(serde_json::Value::Null)
+        } else if let Ok(v) = row.try_get::<Option<i64>, _>(i) {
+            v.map(|n| serde_json::json!(n)).unwrap_or(serde_json::Value::Null)
+        } else if let Ok(v) = row.try_get::<Option<f64>, _>(i) {
+            v.map(|n| serde_json::json!(n)).unwrap_or(serde_json::Value::Null)
+        } else if let Ok(v) = row.try_get::<Option<bool>, _>(i) {
+            v.map(serde_json::Value::Bool).unwrap_or(serde_json::Value::Null)
+        } else { serde_json::Value::Null };
+        map.insert(name.to_string(), value);
+    }
+    serde_json::Value::Object(map)
 }
