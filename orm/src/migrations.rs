@@ -105,7 +105,7 @@ mod tests {
         assert_eq!(m.name, "create_users");
         assert_eq!(m.up_sql.len(), 1);
         assert!(m.up_sql[0].contains("CREATE TABLE IF NOT EXISTS users"));
-        assert!(m.up_sql[0].contains("id BIGINT PRIMARY KEY AUTOINCREMENT"));
+        assert!(m.up_sql[0].contains("id INTEGER PRIMARY KEY AUTOINCREMENT"));
         assert!(m.up_sql[0].contains("email TEXT UNIQUE"));
         assert!(m.up_sql[0].contains("password VARCHAR(255)"));
         assert!(m.up_sql[0].contains("CHECK (length(password) >= 8)"));
