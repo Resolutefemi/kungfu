@@ -411,14 +411,14 @@ fn bind_param_sqlite<'q>(
     mut q: sqlx::query::Query<'q, sqlx::Sqlite, sqlx::sqlite::SqliteArguments<'q>>,
     p: &serde_json::Value,
 ) -> sqlx::query::Query<'q, sqlx::Sqlite, sqlx::sqlite::SqliteArguments<'q>> {
+    // Bind ALL values as strings. SQLite columns are declared as TEXT in our
+    // migrations, so storing values as strings ensures the type matches and
+    // try_get::<Option<String>> succeeds on read. We parse back to the
+    // correct type in row_to_json_sqlite.
     match p {
         serde_json::Value::Null => { q = q.bind(None::<String>); q }
-        serde_json::Value::Bool(b) => { let b: bool = *b; q = q.bind(b); q }
-        serde_json::Value::Number(n) => {
-            if let Some(i) = n.as_i64() { q = q.bind(i); q }
-            else if let Some(f) = n.as_f64() { q = q.bind(f); q }
-            else { let s: String = n.to_string(); q = q.bind(s); q }
-        }
+        serde_json::Value::Bool(b) => { q = q.bind(if *b { "1" } else { "0" }); q }
+        serde_json::Value::Number(n) => { q = q.bind(n.to_string()); q }
         serde_json::Value::String(s) => { let s: String = s.clone(); q = q.bind(s); q }
         _ => { let s: String = p.to_string(); q = q.bind(s); q }
     }
@@ -430,8 +430,21 @@ fn row_to_json_sqlite(row: &sqlx::sqlite::SqliteRow) -> serde_json::Value {
     let mut map = serde_json::Map::new();
     for (i, col) in row.columns().iter().enumerate() {
         let name = col.name().to_string();
+        // Read everything as String (our columns are all TEXT).
         let value: serde_json::Value = if let Ok(v) = row.try_get::<Option<String>, _>(i) {
-            v.map(serde_json::Value::String).unwrap_or(serde_json::Value::Null)
+            match v {
+                Some(s) => {
+                    // Try to parse as i64, then f64, then keep as string.
+                    if let Ok(n) = s.parse::<i64>() {
+                        serde_json::json!(n)
+                    } else if let Ok(f) = s.parse::<f64>() {
+                        serde_json::json!(f)
+                    } else {
+                        serde_json::Value::String(s)
+                    }
+                }
+                None => serde_json::Value::Null,
+            }
         } else if let Ok(v) = row.try_get::<Option<i64>, _>(i) {
             v.map(|n| serde_json::json!(n)).unwrap_or(serde_json::Value::Null)
         } else if let Ok(v) = row.try_get::<Option<f64>, _>(i) {
