@@ -1,0 +1,15 @@
+[package]
+name = "kungfu-macros"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Proc macros for the Kungfu.js framework (#[derive(Model)], #[field(...)], etc.)"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "2", features = ["full", "extra-traits"] }
+quote = "1"
+proc-macro2 = "1"
