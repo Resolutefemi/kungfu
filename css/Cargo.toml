@@ -1,0 +1,19 @@
+[package]
+name = "kungfu-css"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Tailwind-like utility CSS engine for the Kungfu.js framework"
+
+[lib]
+name = "kungfu_css"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+regex = { workspace = true }
+once_cell = { workspace = true }
+tracing = { workspace = true }
+walkdir = "2"
