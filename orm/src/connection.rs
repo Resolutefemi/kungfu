@@ -14,7 +14,7 @@ use std::sync::Arc;
 use parking_lot::Mutex;
 use serde::de::DeserializeOwned;
 
-use crate::{Error, Model, Query, Result};
+use crate::{Error, FieldDef, Model, Query, Result};
 
 /// Database configuration.
 #[derive(Debug, Clone, Default)]
@@ -58,20 +58,44 @@ impl Db {
 
     /// Connect to a real database. Requires the matching feature flag.
     pub async fn connect(config: &DbConfig) -> Result<Self> {
-        let _ = config; // unused in mock mode
+        let url = &config.url;
+        let max = config.max_connections.max(1) as u32;
+        let min = config.min_connections.min(max as usize) as u32;
+
         #[cfg(feature = "postgres")]
-        {
-            if config.url.starts_with("postgres://") || config.url.starts_with("postgresql://") {
-                let pool = sqlx::postgres::PgPoolOptions::new()
-                    .max_connections(config.max_connections as u32)
-                    .min_connections(config.min_connections as u32)
-                    .connect(&config.url)
-                    .await
-                    .map_err(|e| Error::Database(e.to_string()))?;
-                return Ok(Self { inner: Arc::new(DbInner::Postgres(pool)) });
-            }
+        if url.starts_with("postgres://") || url.starts_with("postgresql://") {
+            let pool = sqlx::postgres::PgPoolOptions::new()
+                .max_connections(max)
+                .min_connections(min)
+                .connect(url)
+                .await
+                .map_err(|e| Error::Database(e.to_string()))?;
+            return Ok(Self { inner: Arc::new(DbInner::Postgres(pool)) });
         }
-        #[allow(unreachable_code)]
+
+        #[cfg(feature = "mysql")]
+        if url.starts_with("mysql://") {
+            let pool = sqlx::mysql::MySqlPoolOptions::new()
+                .max_connections(max)
+                .min_connections(min)
+                .connect(url)
+                .await
+                .map_err(|e| Error::Database(e.to_string()))?;
+            return Ok(Self { inner: Arc::new(DbInner::Mysql(pool)) });
+        }
+
+        #[cfg(feature = "sqlite")]
+        if url.starts_with("sqlite://") || url.starts_with("sqlite::") {
+            let pool = sqlx::sqlite::SqlitePoolOptions::new()
+                .max_connections(max)
+                .min_connections(min)
+                .connect(url)
+                .await
+                .map_err(|e| Error::Database(e.to_string()))?;
+            return Ok(Self { inner: Arc::new(DbInner::Sqlite(pool)) });
+        }
+
+        // Fall back to mock if no driver matched.
         Ok(Self::mock())
     }
 
@@ -90,9 +114,17 @@ impl Db {
     }
 
     /// Count matching rows.
-    pub async fn count<T: Model>(&self, _q: Query<T>) -> Result<i64> {
-        // Simplified — V1 will translate the query to COUNT(*) properly.
-        Ok(0)
+    pub async fn count<T: Model>(&self, q: Query<T>) -> Result<i64> {
+        let (count_sql, params) = q.to_count_sql();
+        match &*self.inner {
+            DbInner::Mock(_) => Ok(0),
+            #[cfg(feature = "postgres")]
+            DbInner::Postgres(pool) => sqlx_count_postgres(pool, &count_sql, &params).await,
+            #[cfg(feature = "mysql")]
+            DbInner::Mysql(pool) => sqlx_count_mysql(pool, &count_sql, &params).await,
+            #[cfg(feature = "sqlite")]
+            DbInner::Sqlite(pool) => sqlx_count_sqlite(pool, &count_sql, &params).await,
+        }
     }
 
     /// Insert a row.
@@ -100,11 +132,24 @@ impl Db {
         match &*self.inner {
             DbInner::Mock(m) => mock_insert(m, value).await,
             #[cfg(feature = "postgres")]
-            DbInner::Postgres(_) => Err(Error::NoDriver),
+            DbInner::Postgres(pool) => sqlx_insert_postgres(pool, value).await,
             #[cfg(feature = "mysql")]
-            DbInner::Mysql(_) => Err(Error::NoDriver),
+            DbInner::Mysql(pool) => sqlx_insert_mysql(pool, value).await,
             #[cfg(feature = "sqlite")]
-            DbInner::Sqlite(_) => Err(Error::NoDriver),
+            DbInner::Sqlite(pool) => sqlx_insert_sqlite(pool, value).await,
+        }
+    }
+
+    /// Execute an UPDATE statement. Returns the number of affected rows.
+    pub async fn execute(&self, sql: &str, params: &[serde_json::Value]) -> Result<u64> {
+        match &*self.inner {
+            DbInner::Mock(_) => Ok(0),
+            #[cfg(feature = "postgres")]
+            DbInner::Postgres(pool) => sqlx_execute_postgres(pool, sql, params).await,
+            #[cfg(feature = "mysql")]
+            DbInner::Mysql(pool) => sqlx_execute_mysql(pool, sql, params).await,
+            #[cfg(feature = "sqlite")]
+            DbInner::Sqlite(pool) => sqlx_execute_sqlite(pool, sql, params).await,
         }
     }
 }
@@ -363,28 +408,28 @@ async fn sqlx_sqlite_query<T: Model + serde::de::DeserializeOwned>(
 
 #[cfg(feature = "sqlite")]
 fn bind_param_sqlite<'q>(
-    q: sqlx::query::Query<'q, sqlx::Sqlite, sqlx::sqlite::SqliteArguments<'q>>,
+    mut q: sqlx::query::Query<'q, sqlx::Sqlite, sqlx::sqlite::SqliteArguments<'q>>,
     p: &serde_json::Value,
 ) -> sqlx::query::Query<'q, sqlx::Sqlite, sqlx::sqlite::SqliteArguments<'q>> {
     match p {
-        serde_json::Value::Null => q.bind(None::<String>),
-        serde_json::Value::Bool(b) => q.bind(b),
+        serde_json::Value::Null => { q = q.bind(None::<String>); q }
+        serde_json::Value::Bool(b) => { let b: bool = *b; q = q.bind(b); q }
         serde_json::Value::Number(n) => {
-            if let Some(i) = n.as_i64() { q.bind(i) }
-            else if let Some(f) = n.as_f64() { q.bind(f) }
-            else { q.bind(n.to_string()) }
+            if let Some(i) = n.as_i64() { q = q.bind(i); q }
+            else if let Some(f) = n.as_f64() { q = q.bind(f); q }
+            else { let s: String = n.to_string(); q = q.bind(s); q }
         }
-        serde_json::Value::String(s) => q.bind(s),
-        _ => q.bind(p.to_string()),
+        serde_json::Value::String(s) => { let s: String = s.clone(); q = q.bind(s); q }
+        _ => { let s: String = p.to_string(); q = q.bind(s); q }
     }
 }
 
 #[cfg(feature = "sqlite")]
 fn row_to_json_sqlite(row: &sqlx::sqlite::SqliteRow) -> serde_json::Value {
-    use sqlx::Row;
+    use sqlx::{Column, Row};
     let mut map = serde_json::Map::new();
     for (i, col) in row.columns().iter().enumerate() {
-        let name = col.name();
+        let name = col.name().to_string();
         let value: serde_json::Value = if let Ok(v) = row.try_get::<Option<String>, _>(i) {
             v.map(serde_json::Value::String).unwrap_or(serde_json::Value::Null)
         } else if let Ok(v) = row.try_get::<Option<i64>, _>(i) {
@@ -393,8 +438,197 @@ fn row_to_json_sqlite(row: &sqlx::sqlite::SqliteRow) -> serde_json::Value {
             v.map(|n| serde_json::json!(n)).unwrap_or(serde_json::Value::Null)
         } else if let Ok(v) = row.try_get::<Option<bool>, _>(i) {
             v.map(serde_json::Value::Bool).unwrap_or(serde_json::Value::Null)
-        } else { serde_json::Value::Null };
-        map.insert(name.to_string(), value);
+        } else {
+            serde_json::Value::Null
+        };
+        map.insert(name, value);
     }
     serde_json::Value::Object(map)
+}
+
+// ─── sqlx INSERT implementations ──────────────────────────────────────────────
+
+/// Build an INSERT SQL string from a Model value.
+///
+/// Returns (sql, params). The SQL uses `RETURNING *` for Postgres, or a
+/// SELECT after the insert for SQLite/MySQL (which don't support RETURNING
+/// in older versions).
+pub fn build_insert_sql<T: Model>(value: &T) -> (String, Vec<serde_json::Value>) {
+    let table = T::table_name();
+    let fields = T::fields();
+
+    // Filter out auto_increment fields — the DB assigns them.
+    let insert_fields: Vec<&FieldDef> = fields.iter().filter(|f| !f.auto_increment).collect();
+    let col_names: Vec<&str> = insert_fields.iter().map(|f| f.column_name).collect();
+    let placeholders: Vec<String> = (1..=insert_fields.len()).map(|i| format!("${i}")).collect();
+
+    let mut sql = format!(
+        "INSERT INTO {} ({}) VALUES ({})",
+        table,
+        col_names.join(", "),
+        placeholders.join(", ")
+    );
+
+    // Postgres supports RETURNING *, which lets us fetch the inserted row
+    // (with auto-incremented PK) in one round-trip.
+    #[cfg(feature = "postgres")]
+    sql.push_str(" RETURNING *");
+
+    // Extract the values.
+    let json = serde_json::to_value(value).unwrap_or(serde_json::Value::Null);
+    let mut params = Vec::new();
+    if let Some(obj) = json.as_object() {
+        for f in &insert_fields {
+            let v = obj.get(f.rust_name).cloned().unwrap_or(serde_json::Value::Null);
+            params.push(v);
+        }
+    }
+
+    (sql, params)
+}
+
+#[cfg(feature = "postgres")]
+async fn sqlx_insert_postgres<T: Model + serde::de::DeserializeOwned>(
+    pool: &sqlx::PgPool,
+    value: &T,
+) -> Result<T> {
+    let (sql, params) = build_insert_sql(value);
+    let mut q = sqlx::query(&sql);
+    for p in &params {
+        q = bind_param_postgres(q, p);
+    }
+    let rows = q.fetch_all(pool).await.map_err(|e| Error::Database(e.to_string()))?;
+    if let Some(row) = rows.into_iter().next() {
+        let value = row_to_json_postgres(&row);
+        let t: T = serde_json::from_value(value).map_err(Error::Serde)?;
+        Ok(t)
+    } else {
+        Err(Error::Database("INSERT returned no rows".into()))
+    }
+}
+
+#[cfg(feature = "mysql")]
+async fn sqlx_insert_mysql<T: Model + serde::de::DeserializeOwned>(
+    pool: &sqlx::MySqlPool,
+    value: &T,
+) -> Result<T> {
+    // MySQL doesn't support RETURNING — insert + return the original value.
+    let (sql, params) = build_insert_sql(value);
+    let mut q = sqlx::query(&sql);
+    for p in &params {
+        q = bind_param_mysql(q, p);
+    }
+    q.execute(pool).await.map_err(|e| Error::Database(e.to_string()))?;
+    // Re-deserialise from the original value (PK won't be populated for
+    // auto-increment — caller should fetch it via last_insert_id()).
+    serde_json::from_value(serde_json::to_value(value).unwrap_or(serde_json::Value::Null))
+        .map_err(Error::Serde)
+}
+
+#[cfg(feature = "sqlite")]
+async fn sqlx_insert_sqlite<T: Model + serde::de::DeserializeOwned>(
+    pool: &sqlx::SqlitePool,
+    value: &T,
+) -> Result<T> {
+    // SQLite >= 3.35 supports RETURNING — use it if available.
+    let (mut sql, params) = build_insert_sql(value);
+    if !sql.to_uppercase().contains("RETURNING") {
+        sql.push_str(" RETURNING *");
+    }
+    let mut q = sqlx::query(&sql);
+    for p in &params {
+        q = bind_param_sqlite(q, p);
+    }
+    let rows = q.fetch_all(pool).await.map_err(|e| Error::Database(e.to_string()))?;
+    if let Some(row) = rows.into_iter().next() {
+        let value = row_to_json_sqlite(&row);
+        let t: T = serde_json::from_value(value).map_err(Error::Serde)?;
+        Ok(t)
+    } else {
+        // Fallback: return the original value.
+        serde_json::from_value(serde_json::to_value(value).unwrap_or(serde_json::Value::Null))
+            .map_err(Error::Serde)
+    }
+}
+
+// ─── sqlx COUNT implementations ───────────────────────────────────────────────
+
+#[cfg(feature = "postgres")]
+async fn sqlx_count_postgres(
+    pool: &sqlx::PgPool,
+    sql: &str,
+    params: &[serde_json::Value],
+) -> Result<i64> {
+    let mut q = sqlx::query(sql);
+    for p in params { q = bind_param_postgres(q, p); }
+    let row = q.fetch_one(pool).await.map_err(|e| Error::Database(e.to_string()))?;
+    use sqlx::Row;
+    let count: i64 = row.try_get("count").unwrap_or(0);
+    Ok(count)
+}
+
+#[cfg(feature = "mysql")]
+async fn sqlx_count_mysql(
+    pool: &sqlx::MySqlPool,
+    sql: &str,
+    params: &[serde_json::Value],
+) -> Result<i64> {
+    let mut q = sqlx::query(sql);
+    for p in params { q = bind_param_mysql(q, p); }
+    let row = q.fetch_one(pool).await.map_err(|e| Error::Database(e.to_string()))?;
+    use sqlx::Row;
+    let count: i64 = row.try_get("count").unwrap_or(0);
+    Ok(count)
+}
+
+#[cfg(feature = "sqlite")]
+async fn sqlx_count_sqlite(
+    pool: &sqlx::SqlitePool,
+    sql: &str,
+    params: &[serde_json::Value],
+) -> Result<i64> {
+    let mut q = sqlx::query(sql);
+    for p in params { q = bind_param_sqlite(q, p); }
+    let row = q.fetch_one(pool).await.map_err(|e| Error::Database(e.to_string()))?;
+    use sqlx::Row;
+    let count: i64 = row.try_get("count").unwrap_or(0);
+    Ok(count)
+}
+
+// ─── sqlx EXECUTE implementations (UPDATE/DELETE) ─────────────────────────────
+
+#[cfg(feature = "postgres")]
+async fn sqlx_execute_postgres(
+    pool: &sqlx::PgPool,
+    sql: &str,
+    params: &[serde_json::Value],
+) -> Result<u64> {
+    let mut q = sqlx::query(sql);
+    for p in params { q = bind_param_postgres(q, p); }
+    let result = q.execute(pool).await.map_err(|e| Error::Database(e.to_string()))?;
+    Ok(result.rows_affected())
+}
+
+#[cfg(feature = "mysql")]
+async fn sqlx_execute_mysql(
+    pool: &sqlx::MySqlPool,
+    sql: &str,
+    params: &[serde_json::Value],
+) -> Result<u64> {
+    let mut q = sqlx::query(sql);
+    for p in params { q = bind_param_mysql(q, p); }
+    let result = q.execute(pool).await.map_err(|e| Error::Database(e.to_string()))?;
+    Ok(result.rows_affected())
+}
+
+#[cfg(feature = "sqlite")]
+async fn sqlx_execute_sqlite(
+    pool: &sqlx::SqlitePool,
+    sql: &str,
+    params: &[serde_json::Value],
+) -> Result<u64> {
+    let mut q = sqlx::query(sql);
+    for p in params { q = bind_param_sqlite(q, p); }
+    let result = q.execute(pool).await.map_err(|e| Error::Database(e.to_string()))?;
+    Ok(result.rows_affected())
 }

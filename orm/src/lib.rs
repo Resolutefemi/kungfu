@@ -85,4 +85,61 @@ pub trait Model: serde::Serialize + serde::de::DeserializeOwned + Send + Sync + 
     async fn all(db: &Db) -> Result<Vec<Self>> {
         Query::<Self>::select(Self::table_name()).all(db).await
     }
+
+    /// Find a row by primary key. Returns `NotFound` if missing.
+    /// Only works for models with a single primary key field.
+    async fn find_by_pk<V: serde::Serialize + Send + Sync>(pk: V, db: &Db) -> Result<Self> {
+        let pk_field = Self::fields().iter().find(|f| f.is_primary).ok_or(Error::Database(
+            "no primary key field defined on model".into()
+        ))?;
+        Self::find()
+            .where_eq(pk_field.column_name, pk)
+            .one(db)
+            .await
+    }
+
+    /// Update this row by primary key. `sets` is a list of (column, new_value).
+    /// The PK column is auto-appended to the WHERE clause.
+    async fn update_by_pk<V: serde::Serialize + Send + Sync>(
+        db: &Db,
+        pk_value: V,
+        sets: Vec<(&'static str, serde_json::Value)>,
+    ) -> Result<u64> {
+        let pk_field = Self::fields().iter().find(|f| f.is_primary).ok_or(Error::Database(
+            "no primary key field defined on model".into()
+        ))?;
+        let mut q = Query::<Self>::select(Self::table_name());
+        q = q.where_eq(pk_field.column_name, pk_value);
+        let sets: Vec<(String, serde_json::Value)> = sets
+            .into_iter()
+            .map(|(c, v)| (c.to_string(), v))
+            .collect();
+        let (sql, params) = q.to_update_sql(&sets);
+        db.execute(&sql, &params).await
+    }
+
+    /// Delete rows matching the given WHERE column + value.
+    async fn delete_where<V: serde::Serialize + Send + Sync>(
+        col: &'static str,
+        value: V,
+        db: &Db,
+    ) -> Result<u64> {
+        let mut q = Query::<Self>::select(Self::table_name());
+        q = q.where_eq(col, value);
+        let (sql, params) = q.to_delete_sql();
+        db.execute(&sql, &params).await
+    }
+
+    /// Delete a row by primary key. Returns the number of rows deleted.
+    async fn delete_by_pk<V: serde::Serialize + Send + Sync>(pk_value: V, db: &Db) -> Result<u64> {
+        let pk_field = Self::fields().iter().find(|f| f.is_primary).ok_or(Error::Database(
+            "no primary key field defined on model".into()
+        ))?;
+        Self::delete_where(pk_field.column_name, pk_value, db).await
+    }
+
+    /// Count rows matching the current query.
+    async fn count(db: &Db) -> Result<i64> {
+        Query::<Self>::select(Self::table_name()).count(db).await
+    }
 }

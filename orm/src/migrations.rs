@@ -66,11 +66,16 @@ fn sql_type_for(f: &FieldDef) -> &'static str {
     // codegen time (well, it does, but we kept the FieldDef minimal). For
     // V2 we'll thread the Rust type through FieldDef. For V1 we infer the
     // SQL type from heuristics:
-    //   - primary keys → BIGINT
+    //   - primary keys with auto_increment → INTEGER (SQLite-compatible)
+    //   - primary keys without auto_increment → BIGINT
     //   - sensitive fields (passwords) → VARCHAR(255)
     //   - everything else → TEXT
     if f.is_primary {
-        "BIGINT"
+        if f.auto_increment {
+            "INTEGER"  // SQLite needs INTEGER for autoincrement
+        } else {
+            "BIGINT"
+        }
     } else if f.sensitive {
         "VARCHAR(255)"
     } else {

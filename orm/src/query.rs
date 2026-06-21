@@ -131,6 +131,86 @@ impl<T: Model> Query<T> {
         (sql, params)
     }
 
+    /// Compile this query into a `SELECT COUNT(*)` statement + params.
+    /// Drops ORDER BY / LIMIT / OFFSET (they don't affect count).
+    pub fn to_count_sql(&self) -> (String, Vec<serde_json::Value>) {
+        let mut sql = format!("SELECT COUNT(*) AS count FROM {}", self.table);
+        let mut params = Vec::new();
+
+        if !self.wheres.is_empty() {
+            sql.push_str(" WHERE ");
+            let mut parts = Vec::new();
+            for w in &self.wheres {
+                let next_idx = params.len() + 1;
+                let (clause, mut p) = compile_where(w, next_idx);
+                parts.push(clause);
+                params.append(&mut p);
+            }
+            sql.push_str(&parts.join(" AND "));
+        }
+
+        (sql, params)
+    }
+
+    /// Compile an UPDATE statement from a SET clause + WHERE filters.
+    /// e.g. `UPDATE users SET email = $1 WHERE id = $2`
+    pub fn to_update_sql(
+        &self,
+        sets: &[(String, serde_json::Value)],
+    ) -> (String, Vec<serde_json::Value>) {
+        let mut params = Vec::new();
+        let mut sql = format!("UPDATE {} SET ", self.table);
+
+        let set_parts: Vec<String> = sets
+            .iter()
+            .enumerate()
+            .map(|(i, (col, _))| {
+                let idx = i + 1;
+                format!("{col} = ${idx}")
+            })
+            .collect();
+        sql.push_str(&set_parts.join(", "));
+
+        for (_, v) in sets {
+            params.push(v.clone());
+        }
+
+        if !self.wheres.is_empty() {
+            sql.push_str(" WHERE ");
+            let mut parts = Vec::new();
+            for w in &self.wheres {
+                let next_idx = params.len() + 1;
+                let (clause, mut p) = compile_where(w, next_idx);
+                parts.push(clause);
+                params.append(&mut p);
+            }
+            sql.push_str(&parts.join(" AND "));
+        }
+
+        (sql, params)
+    }
+
+    /// Compile a DELETE statement.
+    /// e.g. `DELETE FROM users WHERE id = $1`
+    pub fn to_delete_sql(&self) -> (String, Vec<serde_json::Value>) {
+        let mut sql = format!("DELETE FROM {}", self.table);
+        let mut params = Vec::new();
+
+        if !self.wheres.is_empty() {
+            sql.push_str(" WHERE ");
+            let mut parts = Vec::new();
+            for w in &self.wheres {
+                let next_idx = params.len() + 1;
+                let (clause, mut p) = compile_where(w, next_idx);
+                parts.push(clause);
+                params.append(&mut p);
+            }
+            sql.push_str(&parts.join(" AND "));
+        }
+
+        (sql, params)
+    }
+
     /// Execute the query and return all matching rows.
     pub async fn all(self, db: &Db) -> Result<Vec<T>> {
         db.query::<T>(self).await
@@ -145,7 +225,7 @@ impl<T: Model> Query<T> {
 
     /// Count matching rows (drops LIMIT/OFFSET).
     pub async fn count(self, db: &Db) -> Result<i64> {
-        db.count(self).await
+        db.count::<T>(self).await
     }
 }
 
