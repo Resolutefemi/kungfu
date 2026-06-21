@@ -20,6 +20,8 @@ pub mod router;
 pub mod server;
 pub mod version;
 pub mod websocket;
+pub mod jobs;
+pub mod plugin;
 
 #[cfg(feature = "ffi")]
 pub mod ffi;

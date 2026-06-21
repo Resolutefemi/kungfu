@@ -30,6 +30,7 @@ socket2 = { version = "0.5", features = ["all"] }
 base64 = "0.22"
 ring = "0.17"
 flate2 = "1"
+async-trait = "0.1"
 
 # Optional: SIMD-accelerated JSON for x86_64 with AVX2.
 # Enable with `--features simd`. Falls back to serde_json on other arches.
