@@ -29,6 +29,7 @@ pub mod middleware_builtin {
         security_headers, security_headers_with, SecurityConfig,
     };
     pub use crate::middleware::builtin::serve_static::serve_static;
+    pub use crate::middleware::builtin::validate::{validate_json, validate_against_schema};
 }
 
 pub use error::{KungfuError, Result, StatusCode};

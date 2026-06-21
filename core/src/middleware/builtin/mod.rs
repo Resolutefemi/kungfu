@@ -16,3 +16,4 @@ pub mod rate_limiter;
 pub mod serve_static;
 pub mod etag;
 pub mod gzip;
+pub mod validate;
