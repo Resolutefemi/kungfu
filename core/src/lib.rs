@@ -22,6 +22,7 @@ pub mod websocket;
 pub mod middleware_builtin {
     pub use crate::middleware::builtin::cors::{cors, cors_with, CorsConfig};
     pub use crate::middleware::builtin::etag::etag;
+    pub use crate::middleware::builtin::gzip::gzip;
     pub use crate::middleware::builtin::logger::logger;
     pub use crate::middleware::builtin::rate_limiter::{rate_limiter, rate_limiter_with, RateLimiterConfig};
     pub use crate::middleware::builtin::security_headers::{
