@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["core", "kungfu", "kungfu-macros", "orm", "css", "frontend", "cli", "bench/actix"]
+members = ["core", "kungfu", "kungfu-macros", "orm", "css", "frontend", "cli", "bench/actix", "bindings/js"]
 
 [workspace.package]
 version = "1.0.0"

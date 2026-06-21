@@ -12,9 +12,10 @@ crate-type = ["cdylib"]
 
 [dependencies]
 kungfu-core = { path = "../../core" }
-napi = { version = "2", features = ["napi8", "tokio_rt", "serde-json"] }
+kungfu-css = { path = "../../css" }
+napi = { version = "2", features = ["napi8", "tokio_rt"] }
 napi-derive = "2"
-tokio = { workspace = true }
+bytes = { workspace = true }
 serde_json = { workspace = true }
 
 [build-dependencies]
