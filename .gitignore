@@ -1,0 +1,64 @@
+# Rust
+/target
+**/*.rs.bk
+*.pdb
+Cargo.lock
+
+# Remove Cargo.lock from ignore for binary crates (we want reproducible builds)
+# Actually, libraries shouldn't commit Cargo.lock but binaries should. Since this
+# workspace ships binaries (cli, examples), we'll commit Cargo.lock.
+!Cargo.lock
+
+# Node / napi-rs
+bindings/js/node_modules/
+bindings/js/dist/
+bindings/js/build/
+bindings/js/*.tgz
+bindings/js/.npmrc
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+.env
+
+# Go
+bindings/go/vendor/
+bindings/go/kungfu-go
+
+# Java
+bindings/java/target/
+bindings/java/*.class
+bindings/java/.gradle/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# OS
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Build artifacts
+dist/
+build/
+out/
+
+# Coverage
+*.lcov
+.nyc_output/
+tarpaulin-report.html
+
+# Environment
+.env
+.env.local
+.env.*.local
