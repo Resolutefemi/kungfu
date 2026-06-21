@@ -20,7 +20,7 @@ Plus 1 doctest in `kungfu` (the Quickstart example).
 # All tests, default features:
 cargo test --workspace --lib
 
-# Core tests with all V2 features enabled:
+# Core tests with all V1 features enabled:
 cargo test -p kungfu-core --lib --features "io_uring simd"
 
 # Verbose output:
@@ -66,8 +66,8 @@ cargo test --workspace --lib -- --nocapture
 
 - **Integration tests** for the JS/TS binding (requires building the napi-rs addon, which needs Node toolchain)
 - **End-to-end tests** for the io_uring path under load (the existing test verifies single-request correctness)
-- **Fuzz testing** of the HTTP parser (planned for V2.1 — `cargo-fuzz` integration)
-- **Chaos testing** — kill connections mid-stream, send malformed headers (planned for V2.1)
+- **Fuzz testing** of the HTTP parser (planned for V1.1 — `cargo-fuzz` integration)
+- **Chaos testing** — kill connections mid-stream, send malformed headers (planned for V1.1)
 
 ## CI
 

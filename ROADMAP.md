@@ -1,8 +1,8 @@
 # Kungfu.js Roadmap
 
-This document tracks the path from V2 to "fastest framework ever" and beyond.
+This document tracks the path from V1 to "fastest framework ever" and beyond.
 
-## Status: V2 shipped (2026-06-21)
+## Status: V1 shipped (2026-06-21)
 
 | Component | Status |
 |---|---|
@@ -18,7 +18,7 @@ This document tracks the path from V2 to "fastest framework ever" and beyond.
 | Frontend module (.kungfu SSR + livereload + TS type gen) | ✅ shipped |
 | Benchmark suite vs actix/express/fastapi | ✅ scripts + harness |
 
-## V2.1 — Productivity (next 1-2 weeks)
+## V1.1 — Productivity (next 1-2 weeks)
 
 ### Backend
 - **C ABI via `cbindgen`** — opaque `KungfuRouter`/`KungfuServer` pointers. Prerequisite for the non-JS language bindings.
@@ -41,7 +41,7 @@ This document tracks the path from V2 to "fastest framework ever" and beyond.
 - **`kungfu generate admin`** — generate admin dashboard from model definitions.
 - **`kungfu deploy`** — one-command deploy to Docker / Vercel / AWS Lambda.
 
-## V2.2 — Polyglot bindings (1-2 months)
+## V1.2 — Polyglot bindings (1-2 months)
 
 Language bindings, in priority order:
 
@@ -54,7 +54,7 @@ Language bindings, in priority order:
 
 Each binding is ~1 day of work given the C ABI exists.
 
-## V2.3 — Performance (1-2 months)
+## V1.3 — Performance (1-2 months)
 
 Path to 3M req/s on 16-core production hardware:
 
@@ -79,8 +79,8 @@ Path to 3M req/s on 16-core production hardware:
 
 Kungfu aims to be the **fastest framework ever** that's also **polyglot** and **full-stack**. The competition:
 
-- **For speed**: gemini (C++), may_minihttp (Rust). Kungfu matches these architecturally; V2.3 closes the remaining gap.
+- **For speed**: gemini (C++), may_minihttp (Rust). Kungfu matches these architecturally; V1.3 closes the remaining gap.
 - **For polyglot**: no real competitor. Most frameworks are language-locked.
 - **For full-stack**: Next.js, Nuxt, SvelteKit — but they're JS-only on the backend. Kungfu lets you write the backend in any language while keeping the frontend in JS/TS.
 
-The "fastest framework ever" claim becomes defensible once V2.3 lands. The "polyglot full-stack" claim is already defensible.
+The "fastest framework ever" claim becomes defensible once V1.3 lands. The "polyglot full-stack" claim is already defensible.

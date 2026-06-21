@@ -25,13 +25,13 @@ kungfu/
 │       │   ├── mod.rs          # tokio + httparse, hand-rolled HTTP/1.1
 │       │   ├── pool.rs         # buffer pooling (no per-request alloc)
 │       │   ├── hot_reload.rs   # notify + atomic router swap
-│       │   └── io_uring.rs     # V2 io_uring zero-copy path + pipelining
+│       │   └── io_uring.rs     # V1 io_uring zero-copy path + pipelining
 │       ├── router/             # trie with :params + *wildcards
 │       ├── middleware/         # onion pipeline + built-ins
 │       ├── openapi/            # auto OpenAPI 3.1 from route table
 │       ├── request/            # Request type
 │       ├── response/           # Response type + pool.rs (response recycling)
-│       ├── headers.rs          # SmallVec-backed Headers type (V2)
+│       ├── headers.rs          # SmallVec-backed Headers type (V1)
 │       ├── error.rs            # KungfuError { code, message, detail, suggestion }
 │       └── version.rs
 ├── css/                        # kungfu-css — Tailwind-like utility engine
