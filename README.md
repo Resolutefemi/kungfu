@@ -4,7 +4,7 @@
 [![Bench](https://github.com/Resolutefemi/kungfu/actions/workflows/benchmark.yml/badge.svg)](https://github.com/Resolutefemi/kungfu/actions/workflows/benchmark.yml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](./LICENSE-MIT)
 [![Rust](https://img.shields.io/badge/rust-1.96%2B-orange.svg)](https://www.rust-lang.org)
-[![V2](https://img.shields.io/badge/version-V2-ff69b4.svg)](./CHANGELOG.md)
+[![V1](https://img.shields.io/badge/version-V1-ff69b4.svg)](./CHANGELOG.md)
 
 > One API surface, infinite languages. A polyglot full-stack framework with a Rust core.
 > **Backend: any language. Frontend: JavaScript / TypeScript only.**
@@ -26,9 +26,11 @@ The framework also ships:
 - A **built-in ORM** with `#[derive(Model)]`, parameterised query builder,
   and migration generator.
 
-This repository contains the **V1.1 foundation** plus scaffolds for V2.
+This repository contains the **V1.0 release** — the first stable version
+of the framework. Future point releases (V1.1, V1.2, ...) will add the
+items marked ⏳ below.
 
-## What's in V2
+## What's in V1
 
 | Component | Status | Path |
 |---|---|---|
@@ -55,11 +57,11 @@ This repository contains the **V1.1 foundation** plus scaffolds for V2.
 | kungfu-css (Tailwind-like utility engine) | ✅ shipped | `css/` |
 | Frontend module (`.kungfu` SSR, live reload, TS type gen) | ✅ shipped | `frontend/` |
 | C ABI via `cbindgen` | ⏳ V1.2 | `core/src/ffi.rs` |
-| Language bindings: Python / Go / Java / Dart / Swift / C++ | ⏳ V2.1 | `bindings/` |
-| HTTP/3 (`quinn` + `h3`) | ⏳ V2.1 | `core/src/server/` |
-| SmallVec-backed headers + Response pooling | ⏳ V2.1 | `core/src/` |
+| Language bindings: Python / Go / Java / Dart / Swift / C++ | ⏳ V1.1 | `bindings/` |
+| HTTP/3 (`quinn` + `h3`) | ⏳ V1.1 | `core/src/server/` |
+| SmallVec-backed headers + Response pooling | ⏳ V1.1 | `core/src/` |
 | Admin dashboard generator | ⏳ Phase 3 | `admin/` |
-| `kungfu new` / `kungfu deploy` | ⏳ V2.1 | `cli/` |
+| `kungfu new` / `kungfu deploy` | ⏳ V1.1 | `cli/` |
 
 ## Building with maximum performance
 
@@ -286,18 +288,18 @@ compromising on developer ergonomics. Concretely:
 - **Tuned tokio runtime**: multi-threaded, worker threads == CPU count.
 - **`forbid(unsafe_code)` in the core** — all unsafe is in proven deps.
 - **CSS engine in Rust** — no Node.js process spawned for `kungfu build`.
-- **Planned V2**: HTTP/3 via `quinn` + `h3`, io_uring zero-copy on Linux 5.x+,
+- **Planned V1.1+**: HTTP/3 via `quinn` + `h3`, additional language bindings,
   SIMD JSON parsing, `smallvec`-backed header storage.
 
 ## Roadmap
 
-### V1.2 — Productivity
+### V1.1 — Productivity
 - C ABI via `cbindgen` (opaque `KungfuRouter`/`KungfuServer` pointers).
 - JSON Schema request validation (rejected requests return 422).
 - Multipart body parsing.
 - Source-code hot reload (cargo-watch style, not just router swap).
 
-### V2 — Performance + Polyglot
+### V1.2 — Performance + Polyglot
 - HTTP/3 via `quinn` + `h3`.
 - io_uring zero-copy reads on Linux 5.x+.
 - Language bindings, in this order: Python (pyo3), Go (cgo), Java (JNI),

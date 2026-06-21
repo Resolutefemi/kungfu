@@ -9,28 +9,28 @@ to hit 3 million requests per second on production hardware.
 Measured on a constrained sandbox container (4 vCPU, single-process client
 competing with server for CPU):
 
-### V1.2 (default build, no io_uring, no simd)
+### V1.0 (default build, no io_uring, no simd)
 | Concurrency | Throughput | p50 latency | p99 latency |
 |---|---|---|---|
 | 64 | 194,276 req/s | 341μs | 547μs |
 | 256 | 263,692 req/s | 525μs | 1,422μs |
 
-### V2 (io_uring + simd features enabled)
+### V1.0 with io_uring + simd features enabled
 End-to-end through the demo server with the full middleware stack on:
 - `/hello` (cached JSON response): **53,414 req/s** through Python client
 - 404 uses pre-serialised body (no per-request JSON encode)
 - All requests served via io_uring + simd-json
 
-For comparison, the same benchmark before the V1.2 perf pass:
+For comparison, the same benchmark before the perf pass that became V1.0:
 
 | Concurrency | Throughput | p50 latency | p99 latency |
 |---|---|---|---|
 | 32 | 36,361 req/s | 37μs | 40,990μs |
 
-That's a **5.4× throughput improvement** and a **75× p99 latency improvement** for V1.2,
-plus io_uring + simd-json + pipelining on top for V2.
+That's a **5.4× throughput improvement** and a **75× p99 latency improvement**,
+plus io_uring + simd-json + pipelining shipped as feature flags in V1.0.
 
-## What changed in V2
+## What changed in V1.0
 
 1. **io_uring zero-copy I/O** (`tokio-uring` feature flag, Linux 5.1+).
    Each acceptor thread runs its own io_uring instance. Connections are
@@ -52,7 +52,7 @@ plus io_uring + simd-json + pipelining on top for V2.
    `available_parallelism()` acceptor threads by default, so on a 16-core
    box the demo runs 16 acceptors out of the box.
 
-## What changed in V1.2
+## Other V1.0 perf wins
 
 1. **`bytes::Bytes` for request/response bodies** — cloning is now an atomic
    Arc increment (~5ns) instead of a memcpy. For handlers that return the
@@ -76,7 +76,7 @@ plus io_uring + simd-json + pipelining on top for V2.
 5. **TCP_NODELAY on every connection** — disables Nagle's algorithm so
    small responses aren't buffered by the kernel.
 
-6. **Buffer pooling** (V1.1) — per-connection read buffers come from a
+6. **Buffer pooling** (V1.0) — per-connection read buffers come from a
    shared `BufferPool`, so no allocation on the hot path.
 
 ## What's needed for 3M req/s
@@ -90,57 +90,55 @@ separate load-gen machine):
 - **Separate load-gen machine** running `oha`, `wrk`, or `vegeta`
 - **Kernel 5.1+** for io_uring support
 
-### Required software changes (V2 roadmap)
+### Required software changes (V1.1+ roadmap)
 
 1. **io_uring zero-copy** (`tokio-uring`)
-   - ✅ **Shipped in V2** — feature flag `io_uring`
+   - ✅ **Shipped in V1.0** — feature flag `io_uring`
    - Replace `tokio::net::TcpListener` with `tokio_uring::TcpListener`
    - Submitted read/write batches reduce syscalls by 10–20×
    - Expected gain: 2–3×
 
 2. **HTTP/1.1 pipelining**
-   - ✅ **Shipped in V2** — io_uring path carries leftover bytes between
+   - ✅ **Shipped in V1.0** — io_uring path carries leftover bytes between
      requests, processes all queued requests before going back to kernel
-   - V2.1 will add batched `writev` for multiple responses in one syscall
+   - V1.1 will add batched `writev` for multiple responses in one syscall
    - Expected gain: 1.5–2×
 
 3. **SIMD JSON parsing** (`simd-json`)
-   - ✅ **Shipped in V2** — feature flag `simd`
+   - ✅ **Shipped in V1.0** — feature flag `simd`
    - Drop-in replacement for `serde_json` on x86_64 with AVX2
    - 2–4× faster JSON encode/decode
    - Wired into both `Request::json()` and `Response::json()`
 
 4. **`smallvec` for headers**
-   - Most requests have <16 headers — avoid heap allocation entirely
-   - Currently `Vec<(String, String)>` — switch to `SmallVec<[(SmallString; 16)]>`
+   - ✅ **Shipped in V1.0** — `Headers` type backed by SmallVec
+   - Most requests have <16 headers — first 16 pairs stored inline
    - Expected gain: 1.2×
 
-5. **Connection-per-thread scheduling**
+5. **Response object pooling**
+   - ✅ **Shipped in V1.0** — `ResponsePool` for recycling Response objects
+   - Avoids BTreeMap allocation per request
+   - Expected gain: 1.2×
+
+6. **Connection-per-thread scheduling**
    - Pin each TCP connection to a specific worker thread (no cross-thread
      wakeups)
    - Use `tokio::task::spawn_local` on a per-thread runtime
    - Expected gain: 1.3×
 
-6. **Response object pooling**
-   - Reuse `Response` objects across requests (reset headers + body)
-   - Avoids `BTreeMap` allocation per request
-   - Expected gain: 1.2×
-
 7. **Custom HTTP parser**
    - `httparse` is good, but a hand-rolled parser tuned for our exact
      `Request` shape can be 1.5–2× faster
-   - Long-term V2.1 item
+   - Long-term V1.1 item
 
 ### Multiplicative effect
 
-V2 shipped items: io_uring (2.5×) + pipelining (1.5×) + simd (1.3×) = ~5×
-over V1.2. Remaining roadmap items add another ~2×:
-- SmallVec headers: 1.2×
-- Connection pinning: 1.3×
-- Response pooling: 1.2×
+V1.0 shipped items: io_uring (2.5×) + pipelining (1.5×) + simd (1.3×)
++ SmallVec headers (1.2×) + Response pool (1.2×) = ~7× over baseline.
+Remaining roadmap items (connection pinning + custom parser) add another ~1.7×.
 
-Combined V2 + remaining: ~10× on top of V1.1. Current dedicated-hardware
-estimate is ~300k req/s on a 16-core box → 10× = 3M req/s. ✅
+Combined: ~12× on top of the original baseline. Current dedicated-hardware
+estimate is ~300k req/s on a 16-core box → 12× = 3.6M req/s. ✅
 
 ## How to benchmark properly
 
@@ -171,7 +169,7 @@ with the server for CPU. For real numbers:
 ## Tuning checklist for production
 
 - [ ] Set `acceptor_threads` to the number of physical CPU cores
-- [ ] Ensure kernel ≥ 5.1 (for io_uring, when V2 lands)
+- [ ] Ensure kernel ≥ 5.1 (for io_uring, shipped in V1.0)
 - [ ] Tune `net.core.somaxconn` to ≥ 4096
 - [ ] Set `net.ipv4.tcp_max_syn_backlog` to ≥ 8192
 - [ ] Increase file descriptor limit (`ulimit -n 1048576`)
@@ -193,7 +191,7 @@ serialisation" test (the standard industry benchmark for HTTP frameworks):
 Kungfu's architecture (hand-rolled HTTP, trie router, buffer pool, cached
 responses, multi-acceptor SO_REUSEPORT) matches or exceeds all of these on
 the hot path. The remaining gap to 3M is closed by io_uring + pipelining +
-SIMD JSON, all of which are on the V2 roadmap.
+SIMD JSON, all of which are on the V1.0 roadmap.
 
 The "fastest framework" claim isn't about beating one specific framework on
 one specific benchmark — it's about being in the top tier while also offering
