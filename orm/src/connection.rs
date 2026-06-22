@@ -30,7 +30,7 @@ pub struct Db {
     inner: Arc<DbInner>,
 }
 
-enum DbInner {
+pub enum DbInner {
     /// In-memory mock driver — used for tests and when no `sqlx` feature
     /// is enabled. Stores rows as `serde_json::Value` keyed by table.
     Mock(Mutex<MockDb>),

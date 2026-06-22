@@ -46,9 +46,11 @@ pub mod connection;
 pub mod error;
 pub mod migrations;
 pub mod password;
+pub mod extensions;
 
 pub use connection::{Db, DbConfig};
 pub use error::{Error, Result};
+pub use extensions::{JoinClause, JoinType, Transaction};
 pub use migrations::{generate_migration, Migration};
 pub use password::{hash_password, verify_password};
 pub use query::{Query, WhereClause};
