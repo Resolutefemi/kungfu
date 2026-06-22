@@ -1,0 +1,47 @@
+# Kungfu.js — Helm Chart values
+# Deploy Kungfu.js to Kubernetes.
+
+apiVersion: v2
+name: kungfu
+description: Kungfu.js web framework — polyglot, fast, secure by default
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+
+replicaCount: 3
+
+image:
+  repository: kungfujs/kungfu
+  pullPolicy: IfNotPresent
+  tag: "1.0.0"
+
+service:
+  type: ClusterIP
+  port: 3000
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: chart-example.local
+      paths:
+        - path: /
+          pathType: Prefix
+
+resources:
+  limits:
+    cpu: 2000m
+    memory: 512Mi
+  requests:
+    cpu: 500m
+    memory: 128Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+
+env:
+  RUST_LOG: info
