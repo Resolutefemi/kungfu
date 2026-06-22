@@ -12,6 +12,7 @@ pub mod error;
 pub mod headers;
 pub mod cookies;
 pub mod auth;
+pub mod auth_ext;
 pub mod tls;
 pub mod middleware;
 pub mod openapi;
