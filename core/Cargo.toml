@@ -34,6 +34,7 @@ async-trait = "0.1"
 jsonwebtoken = "9"
 rustls = "0.23"
 rustls-pemfile = "2"
+walkdir = "2"
 
 # Optional: SIMD-accelerated JSON for x86_64 with AVX2.
 # Enable with `--features simd`. Falls back to serde_json on other arches.
