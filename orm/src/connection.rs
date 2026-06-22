@@ -27,7 +27,7 @@ pub struct DbConfig {
 /// A database handle. Cheap to clone — the inner state is behind an `Arc`.
 #[derive(Clone)]
 pub struct Db {
-    inner: Arc<DbInner>,
+    pub inner: Arc<DbInner>,
 }
 
 pub enum DbInner {
@@ -295,7 +295,7 @@ async fn sqlx_postgres_query<T: Model + serde::de::DeserializeOwned>(
 }
 
 #[cfg(feature = "postgres")]
-fn bind_param_postgres<'q>(
+pub fn bind_param_postgres<'q>(
     q: sqlx::query::Query<'q, sqlx::Postgres, sqlx::postgres::PgArguments>,
     p: &serde_json::Value,
 ) -> sqlx::query::Query<'q, sqlx::Postgres, sqlx::postgres::PgArguments> {
@@ -313,7 +313,7 @@ fn bind_param_postgres<'q>(
 }
 
 #[cfg(feature = "postgres")]
-fn row_to_json_postgres(row: &sqlx::postgres::PgRow) -> serde_json::Value {
+pub fn row_to_json_postgres(row: &sqlx::postgres::PgRow) -> serde_json::Value {
     use sqlx::Row;
     let mut map = serde_json::Map::new();
     for (i, col) in row.columns().iter().enumerate() {
@@ -353,7 +353,7 @@ async fn sqlx_mysql_query<T: Model + serde::de::DeserializeOwned>(
 }
 
 #[cfg(feature = "mysql")]
-fn bind_param_mysql<'q>(
+pub fn bind_param_mysql<'q>(
     q: sqlx::query::Query<'q, sqlx::MySql, sqlx::mysql::MySqlArguments>,
     p: &serde_json::Value,
 ) -> sqlx::query::Query<'q, sqlx::MySql, sqlx::mysql::MySqlArguments> {
@@ -371,7 +371,7 @@ fn bind_param_mysql<'q>(
 }
 
 #[cfg(feature = "mysql")]
-fn row_to_json_mysql(row: &sqlx::mysql::MySqlRow) -> serde_json::Value {
+pub fn row_to_json_mysql(row: &sqlx::mysql::MySqlRow) -> serde_json::Value {
     use sqlx::Row;
     let mut map = serde_json::Map::new();
     for (i, col) in row.columns().iter().enumerate() {
@@ -407,7 +407,7 @@ async fn sqlx_sqlite_query<T: Model + serde::de::DeserializeOwned>(
 }
 
 #[cfg(feature = "sqlite")]
-fn bind_param_sqlite<'q>(
+pub fn bind_param_sqlite<'q>(
     mut q: sqlx::query::Query<'q, sqlx::Sqlite, sqlx::sqlite::SqliteArguments<'q>>,
     p: &serde_json::Value,
 ) -> sqlx::query::Query<'q, sqlx::Sqlite, sqlx::sqlite::SqliteArguments<'q>> {
@@ -425,7 +425,7 @@ fn bind_param_sqlite<'q>(
 }
 
 #[cfg(feature = "sqlite")]
-fn row_to_json_sqlite(row: &sqlx::sqlite::SqliteRow) -> serde_json::Value {
+pub fn row_to_json_sqlite(row: &sqlx::sqlite::SqliteRow) -> serde_json::Value {
     use sqlx::{Column, Row};
     let mut map = serde_json::Map::new();
     for (i, col) in row.columns().iter().enumerate() {

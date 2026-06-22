@@ -138,7 +138,6 @@ async fn sqlite_raw_query(
     params: &[serde_json::Value],
 ) -> Result<Vec<serde_json::Value>> {
     use crate::connection::{bind_param_sqlite, row_to_json_sqlite};
-    use sqlx::Row;
     let mut q = sqlx::query(sql);
     for p in params {
         q = bind_param_sqlite(q, p);
@@ -154,7 +153,6 @@ async fn postgres_raw_query(
     params: &[serde_json::Value],
 ) -> Result<Vec<serde_json::Value>> {
     use crate::connection::{bind_param_postgres, row_to_json_postgres};
-    use sqlx::Row;
     let mut q = sqlx::query(sql);
     for p in params {
         q = bind_param_postgres(q, p);
